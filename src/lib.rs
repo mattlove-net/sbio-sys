@@ -6,6 +6,9 @@ extern crate bitflags;
 extern crate libc;
 use bitflags::bitflags;
 
+mod observer;
+use observer::*;
+
 include!("./bindings.rs");
 
 pub struct sbio_channel_handle {}
@@ -41,6 +44,7 @@ pub fn add_event_callback<T>(
     _name: String,
     _callback_function: fn(name: String, format: String, data: &[T]),
 ) -> bool {
+    let mut _subject: Subject<T> = Subject::new();
     true
 }
 

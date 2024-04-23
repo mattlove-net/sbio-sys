@@ -9,3 +9,4 @@ RUN apt-get -y install curl gnupg
 RUN curl -sL https://deb.nodesource.com/setup_20.x  | bash -
 RUN apt-get install -y nodejs
 RUN npm install @commitlint/cli @commitlint/config-conventional --save-dev
+RUN npm install --save-dev semantic-release

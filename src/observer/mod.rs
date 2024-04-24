@@ -18,7 +18,7 @@ pub struct Subject<T> {
 }
 
 impl<T> Subject<T> {
-    pub fn new() -> Subject<T> {
+    pub fn _new() -> Subject<T> {
         Subject {
             observers: Vec::new(),
         }

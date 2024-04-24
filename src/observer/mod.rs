@@ -74,7 +74,7 @@ mod oberserver_tests {
 
     #[test]
     fn add_observer_test() {
-        let mut subject = Subject::new();
+        let mut subject = Subject::_new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 
@@ -87,7 +87,7 @@ mod oberserver_tests {
 
     #[test]
     fn remove_observer_test() {
-        let mut subject = Subject::new();
+        let mut subject = Subject::_new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 
@@ -103,7 +103,7 @@ mod oberserver_tests {
 
     #[test]
     fn notify_test() {
-        let mut subject = Subject::new();
+        let mut subject = Subject::_new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 

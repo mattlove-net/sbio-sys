@@ -17,7 +17,7 @@ use std::ffi::CString;
 include!("./bindings.rs");
 
 pub struct sbio_channel_handle {
-    _channel_handle: *mut gre_io_t,
+    channel_handle: *mut gre_io_t,
 }
 
 bitflags! {
@@ -38,22 +38,29 @@ impl SBIO_FLAGS {
 /// Open a SBIO channel using a named connection
 ///
 /// # Safety
-pub unsafe fn open(channel_name: &str, flags: SBIO_FLAGS) -> *mut gre_io_t {
+pub fn open(channel_name: &str, flags: SBIO_FLAGS) -> Result<sbio_channel_handle, &'static str> {
     let name_cstr = CString::new(channel_name).unwrap().into_raw();
     let handle: *mut gre_io_t;
     unsafe {
         handle = gre_io_open(name_cstr, flags.as_u32() as i32);
         drop(CString::from_raw(name_cstr));
     }
-    handle
+
+    if handle.is_null() {
+        Err("Couldn't open SBIO channel")
+    } else {
+        Ok(sbio_channel_handle {
+            channel_handle: handle,
+        })
+    }
 }
 
 /// Close a SBIO channel
 ///
 /// # Safety
-pub unsafe fn close(channel_handle: *mut gre_io_t) {
+pub fn close(channel_handle: sbio_channel_handle) {
     unsafe {
-        gre_io_close(channel_handle);
+        gre_io_close(channel_handle.channel_handle);
     }
 }
 
@@ -188,15 +195,10 @@ mod tests {
 
     #[test]
     fn open_read_test() {
-        let sbio_t;
-        unsafe {
-            sbio_t = open("sbio1", SBIO_FLAGS::RDONLY);
-        }
-        assert_ne!(sbio_t, std::ptr::null_mut());
-
-        unsafe {
-            close(sbio_t);
-        }
+        let result = open("sbio1", SBIO_FLAGS::RDONLY);
+        assert_eq!(result.is_err(), false);
+        let handle = result.unwrap();
+        close(handle);
     }
 
     #[test]

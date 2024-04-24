@@ -142,6 +142,40 @@ pub fn free_buffer(buffer: sbio_serialized_data) {
     }
 }
 
+/// Send an event
+pub fn send(
+    channel_handle: &sbio_channel_handle,
+    event: sbio_serialized_data,
+) -> Result<i32, &'static str> {
+    let ret: i32;
+    unsafe { ret = gre_io_send(channel_handle.channel_handle, event.buffer) }
+
+    if ret == -1 {
+        Err("Couldn't send event")
+    } else {
+        Ok(ret)
+    }
+}
+
+/// Receive an event
+pub fn receive(channel_handle: &sbio_channel_handle) -> Result<sbio_serialized_data, &'static str> {
+    let mut buffer: *mut gre_io_serialized_data_t = std::ptr::null_mut();
+    let ret: i32;
+
+    unsafe {
+        ret = gre_io_receive(
+            channel_handle.channel_handle,
+            &mut buffer as *mut *mut gre_io_serialized_data_t,
+        );
+    }
+
+    if ret == -1 {
+        Err("Couldn't receive event")
+    } else {
+        Ok(sbio_serialized_data { buffer })
+    }
+}
+
 // pub fn create_send_channel(channel_name: &str, flags: SBIO_FLAGS) -> sbio_channel_handle {
 //     let channel_handle = open(channel_name, SBIO_FLAGS::RDONLY | flags);
 //     sbio_channel_handle { channel_handle: channel_handle }
@@ -232,5 +266,36 @@ mod tests {
         assert_eq!(ptr.var3, data_in.var3);
 
         free_buffer(buffer);
+    }
+
+    #[test]
+    fn send_recieve_test() {
+        let target_in = "target";
+        let name_in = "event1";
+        let format_in = "4s1 var1 2u1 var2 2u1 var2";
+        let data_in = TestData {
+            var1: 100,
+            var2: 10,
+            var3: 5,
+        };
+        let size_in: u32 = 8;
+
+        let result = serialize(target_in, name_in, format_in, data_in, size_in);
+        assert!(result.is_ok());
+        let buffer = result.unwrap();
+
+        let result = open("sbio1", SBIO_FLAGS::RDONLY);
+        let recv_handle = result.unwrap();
+
+        let result = open("sbio1", SBIO_FLAGS::WRONLY);
+        let send_handle = result.unwrap();
+        let result = send(&send_handle, buffer);
+        assert!(result.is_ok());
+
+        let result = receive(&recv_handle);
+        assert!(result.is_ok());
+
+        close(recv_handle);
+        close(send_handle);
     }
 }

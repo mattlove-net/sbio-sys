@@ -128,7 +128,7 @@ pub fn unserialize<'a, T>(buffer: &sbio_serialized_data) -> (&'a str, &'a str, &
 }
 
 /// Free serialized data
-pub fn free_buffer(buffer: sbio_serialized_data) {
+pub fn free_buffer(buffer: &sbio_serialized_data) {
     unsafe {
         gre_io_free_buffer(buffer.buffer);
     }
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(ptr.var2, data_in.var2);
         assert_eq!(ptr.var3, data_in.var3);
 
-        free_buffer(buffer);
+        free_buffer(&buffer);
     }
 
     #[test]

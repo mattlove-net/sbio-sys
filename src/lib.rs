@@ -13,6 +13,18 @@ pub struct SbioSerializeData {
     buffer: sbio_serialized_data,
 }
 
+impl SbioSerializeData {
+    pub fn unserialize<'a, T>(&mut self) -> (&'a str, &'a str, &'a str, &T, i32) {
+        unserialize(&self.buffer)
+    }
+}
+
+impl Drop for SbioSerializeData {
+    fn drop(&mut self) {
+        free_buffer(&self.buffer)
+    }
+}
+
 pub struct SbioConnection {
     channel_handle: sbio_channel_handle,
 }
@@ -40,9 +52,18 @@ impl SbioConnection {
         };
 
         let ret = send(&self.channel_handle, &event);
-        free_buffer(event);
+        free_buffer(&event);
 
         ret
+    }
+
+    pub fn receive(&mut self) -> Result<SbioSerializeData, &'static str> {
+        let buffer = match receive(&self.channel_handle) {
+            Ok(buffer) => buffer,
+            Err(err) => return Err(err),
+        };
+
+        Ok(SbioSerializeData { buffer })
     }
 }
 

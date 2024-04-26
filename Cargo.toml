@@ -1,6 +1,6 @@
 [package]
 name = "sbio-wrapper"
-version = "0.2.0"
+version = "0.3.0"
 
 [dependencies]
 bitflags = "2.5.0"

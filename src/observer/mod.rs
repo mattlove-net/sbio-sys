@@ -25,6 +25,9 @@ impl<T> Subject<T> {
     }
 }
 
+unsafe impl<T> Send for Subject<T> {}
+unsafe impl<T> Sync for Subject<T> {}
+
 impl<T> ISubject<T> for Subject<T> {
     fn add_observer(&mut self, observer: Observer<T>) {
         self.observers.push(observer);

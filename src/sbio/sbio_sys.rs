@@ -15,11 +15,18 @@ use std::ffi::CString;
 include!("./bindings.rs");
 
 bitflags! {
+    #[derive(PartialEq)]
     pub struct SBIO_FLAGS: u32 {
         const RDONLY = GRE_IO_TYPE_RDONLY;
         const XRDONLY = GRE_IO_TYPE_XRDONLY;
         const WRONLY = GRE_IO_TYPE_WRONLY;
         const NONBLOCK = GRE_IO_FLAG_NONBLOCK;
+    }
+}
+
+impl SBIO_FLAGS {
+    pub fn as_u32(&self) -> u32 {
+        self.bits()
     }
 }
 

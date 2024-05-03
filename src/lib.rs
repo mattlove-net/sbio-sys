@@ -22,19 +22,24 @@ impl Drop for SbioSerializeData {
     }
 }
 
+pub trait IEventCallback {
+    fn callback(&self, event: &SbioSerializeData);
+}
+
 pub struct EventObserver {
     event: String,
-    callback: Box<dyn Fn(&SbioSerializeData)>,
+    callback: Box<dyn IEventCallback>,
 }
 
 impl IObserver<SbioSerializeData> for EventObserver {
     fn update(&mut self, event: &SbioSerializeData) {
-        (self.callback)(event);
+        self.callback.callback(event);
     }
 }
 
 struct SbioConnectionData {
     channel_handle: sbio_channel_handle,
+    channel_open: bool,
     stop_receive_thread: bool,
     subscriptions: HashMap<String, Subject<SbioSerializeData>>,
 }
@@ -49,8 +54,11 @@ pub struct SbioConnection {
 impl SbioConnection {
     // Close the SBIO channel and free the handle
     pub fn close(&mut self) {
-        let thread_data = self.thread_data.lock().unwrap();
-        close(&thread_data.channel_handle)
+        let mut thread_data = self.thread_data.lock().unwrap();
+        if thread_data.channel_open {
+            close(&thread_data.channel_handle);
+            thread_data.channel_open = false;
+        }
     }
 
     // Send a serialized event
@@ -109,7 +117,7 @@ impl SbioConnection {
 
             let buffer = match receive(&td.channel_handle) {
                 Ok(buffer) => buffer,
-                Err(err) => panic!("Problem receiving event: {:?}", err),
+                Err(_err) => continue, //Err("Problem receiving event: {:?}", err)
             };
 
             let name = unserialize_event_name(&buffer);
@@ -131,16 +139,17 @@ impl SbioConnection {
     pub fn stop_receive_thread(&mut self) {
         let mut thread_data = self.thread_data.lock().unwrap();
         thread_data.stop_receive_thread = true;
+        drop(thread_data);
         if let Some(th) = self.thread_handle.take() {
             let _ = th.join();
         }
     }
 
     // Register an event callback for receiving an event
-    pub fn add_event_callback<T>(
+    pub fn add_event_callback(
         &mut self,
         name: String,
-        callback_function: fn(event: &SbioSerializeData),
+        callback: Box<dyn IEventCallback>,
     ) -> Arc<Mutex<EventObserver>> {
         //let mut subject: Subject<T> = Subject::new();
         let mut thread_data = self.thread_data.lock().unwrap();
@@ -150,9 +159,9 @@ impl SbioConnection {
             .or_insert(Subject::new());
 
         #[allow(clippy::arc_with_non_send_sync)]
-        let observer = Arc::new(Mutex::new(EventObserver {
+        let observer: Arc<Mutex<EventObserver>> = Arc::new(Mutex::new(EventObserver {
             event: name,
-            callback: Box::new(callback_function),
+            callback,
         }));
         subject.add_observer(observer.clone());
         observer
@@ -196,6 +205,7 @@ impl SbioWrapper {
 
         let connection_data = SbioConnectionData {
             channel_handle: handle,
+            channel_open: true,
             stop_receive_thread: false,
             subscriptions: HashMap::new(),
         };
@@ -212,7 +222,7 @@ impl SbioWrapper {
     }
 
     pub fn connect_receive(&mut self, channel_name: &str) -> Result<SbioConnection, &'static str> {
-        self.connect(channel_name, SBIO_FLAGS::RDONLY)
+        self.connect(channel_name, SBIO_FLAGS::RDONLY | SBIO_FLAGS::NONBLOCK)
     }
 
     pub fn serialize<T>(
@@ -237,4 +247,134 @@ mod tests {
     use super::*;
     use observer::*;
     use sbio::*;
+
+    struct TestData {
+        var1: u32,
+        var2: u16,
+        var3: u16,
+    }
+
+    #[test]
+    fn open_read_test() {
+        let mut sbio = SbioWrapper();
+        let result = sbio.connect_receive("sbio1");
+        assert!(result.is_ok());
+        let mut connection = result.unwrap();
+        connection.close();
+    }
+
+    #[test]
+    fn open_write_test() {
+        let mut sbio = SbioWrapper();
+        let result = sbio.connect_send("sbio1");
+        assert!(result.is_ok());
+        let mut connection = result.unwrap();
+        connection.close();
+    }
+
+    #[test]
+    fn send_event_test() {
+        let mut sbio = SbioWrapper();
+        let mut connection = sbio.connect_send("sbio1").unwrap();
+        let result = connection.send_event(
+            "target",
+            "event1",
+            "4s1 var1 2u1 var2 2u1 var3",
+            TestData {
+                var1: 1,
+                var2: 2,
+                var3: 3,
+            },
+            10,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn receive_event_test() {
+        let mut sbio = SbioWrapper();
+        let mut send = sbio.connect_send("sbio1").unwrap();
+        let result = send.send_event(
+            "target",
+            "event1",
+            "4s1 var1 2u1 var2 2u1 var3",
+            TestData {
+                var1: 1,
+                var2: 2,
+                var3: 3,
+            },
+            10,
+        );
+        let mut rcv = sbio.connect_receive("sbio1").unwrap();
+        let result = rcv.receive();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn async_receive_test() {
+        let mut sbio = SbioWrapper();
+        let mut rcv = sbio.connect_receive("sbio1").unwrap();
+        let event_received = Arc::new(Mutex::new(false));
+
+        let received = event_received.clone();
+
+        struct TestCallback {
+            received: Arc<Mutex<bool>>,
+        }
+
+        impl IEventCallback for TestCallback {
+            fn callback(&self, event: &SbioSerializeData) {
+                let mut received = self.received.lock().unwrap();
+                *received = true;
+            }
+        }
+
+        let callback = TestCallback { received: received };
+
+        let observer = rcv.add_event_callback("event1".to_string(), Box::new(callback));
+
+        let result = rcv.start_receive_thread();
+        assert!(result.is_ok());
+
+        // Send an event
+        let mut send = sbio.connect_send("sbio1").unwrap();
+        let result = send.send_event(
+            "target",
+            "event1",
+            "4s1 var1 2u1 var2 2u1 var3",
+            TestData {
+                var1: 1,
+                var2: 2,
+                var3: 3,
+            },
+            10,
+        );
+        assert!(result.is_ok());
+
+        loop {
+            let received = event_received.lock().unwrap();
+            if *received {
+                break;
+            }
+        }
+
+        rcv.stop_receive_thread();
+    }
+
+    #[test]
+    fn serialize_test() {
+        let mut sbio = SbioWrapper();
+        let target_in = "target";
+        let name_in = "event1";
+        let format_in = "4s1 var1 2u1 var2 2u1 var2";
+        let data_in = TestData {
+            var1: 1,
+            var2: 2,
+            var3: 3,
+        };
+        let size_in = 10;
+
+        let result = sbio.serialize(target_in, name_in, format_in, data_in, size_in);
+        assert!(result.is_ok());
+    }
 }

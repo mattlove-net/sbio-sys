@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/mattlove-net/sbio-wrapper/compare/v0.3.0...v0.4.0) (2024-05-07)
+
+
+### Features
+
+* force release ([066dcd5](https://github.com/mattlove-net/sbio-wrapper/commit/066dcd56d1d11d0be84f33dc300a8df7babab663))
+
 ## [0.3.0](https://github.com/mattlove-net/sbio-wrapper/compare/v0.2.0...v0.3.0) (2024-04-26)
 
 

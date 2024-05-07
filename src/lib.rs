@@ -56,7 +56,8 @@ impl SbioConnection {
     pub fn close(&mut self) {
         let mut thread_data = self.thread_data.lock().unwrap();
         if thread_data.channel_open {
-            close(&thread_data.channel_handle);
+            let sbio_channel_handle = &mut thread_data.channel_handle;
+            close(sbio_channel_handle);
             thread_data.channel_open = false;
         }
     }
@@ -255,45 +256,32 @@ mod tests {
     }
 
     #[test]
-    fn open_read_test() {
+    fn open_test() {
         let mut sbio = SbioWrapper();
-        let result = sbio.connect_receive("sbio1");
-        assert!(result.is_ok());
-        let mut connection = result.unwrap();
-        connection.close();
+        let rcv = match sbio.connect_receive("open_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem opening channel: {:?}", err),
+        };
+
+        let send = match sbio.connect_send("open_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem opening channel: {:?}", err),
+        };
+        drop(rcv);
+        drop(send);
     }
 
     #[test]
-    fn open_write_test() {
+    fn send_receive_event_test() {
         let mut sbio = SbioWrapper();
-        let result = sbio.connect_send("sbio1");
-        assert!(result.is_ok());
-        let mut connection = result.unwrap();
-        connection.close();
-    }
-
-    #[test]
-    fn send_event_test() {
-        let mut sbio = SbioWrapper();
-        let mut connection = sbio.connect_send("sbio1").unwrap();
-        let result = connection.send_event(
-            "target",
-            "event1",
-            "4s1 var1 2u1 var2 2u1 var3",
-            TestData {
-                var1: 1,
-                var2: 2,
-                var3: 3,
-            },
-            10,
-        );
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn receive_event_test() {
-        let mut sbio = SbioWrapper();
-        let mut send = sbio.connect_send("sbio1").unwrap();
+        let mut rcv = match sbio.connect_receive("send_receive_event_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem receiving event: {:?}", err),
+        };
+        let mut send = match sbio.connect_send("send_receive_event_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem sending event: {:?}", err),
+        };
         let result = send.send_event(
             "target",
             "event1",
@@ -305,23 +293,31 @@ mod tests {
             },
             10,
         );
-        let mut rcv = sbio.connect_receive("sbio1").unwrap();
+        assert!(result.is_ok());
         let result = rcv.receive();
         assert!(result.is_ok());
+        rcv.close();
+        send.close();
     }
 
     #[test]
     fn async_receive_test() {
         let mut sbio = SbioWrapper();
-        let mut rcv = sbio.connect_receive("sbio1").unwrap();
+        let mut rcv = match sbio.connect_receive("async_receive_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem receiving event: {:?}", err),
+        };
+        // Send an event
+        let mut send = match sbio.connect_send("async_receive_test") {
+            Ok(connection) => connection,
+            Err(err) => panic!("Problem sending event: {:?}", err),
+        };
+
         let event_received = Arc::new(Mutex::new(false));
-
         let received = event_received.clone();
-
         struct TestCallback {
             received: Arc<Mutex<bool>>,
         }
-
         impl IEventCallback for TestCallback {
             fn callback(&self, event: &SbioSerializeData) {
                 let mut received = self.received.lock().unwrap();
@@ -330,14 +326,10 @@ mod tests {
         }
 
         let callback = TestCallback { received: received };
-
         let observer = rcv.add_event_callback("event1".to_string(), Box::new(callback));
-
         let result = rcv.start_receive_thread();
         assert!(result.is_ok());
 
-        // Send an event
-        let mut send = sbio.connect_send("sbio1").unwrap();
         let result = send.send_event(
             "target",
             "event1",
@@ -351,14 +343,17 @@ mod tests {
         );
         assert!(result.is_ok());
 
+        let received = event_received.clone();
         loop {
-            let received = event_received.lock().unwrap();
+            let received = received.lock().unwrap();
             if *received {
                 break;
             }
         }
 
         rcv.stop_receive_thread();
+        rcv.close();
+        send.close();
     }
 
     #[test]

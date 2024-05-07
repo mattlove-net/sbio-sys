@@ -61,6 +61,10 @@ pub fn open(channel_name: &str, flags: SBIO_FLAGS) -> Result<sbio_channel_handle
 
 /// Close a SBIO channel
 pub fn close(channel_handle: &sbio_channel_handle) {
+    if channel_handle.channel_handle.is_null() {
+        return;
+    }
+
     unsafe {
         gre_io_close(channel_handle.channel_handle);
     }
@@ -263,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn send_recieve_test() {
+    fn send_receive_test() {
         let target_in = "target";
         let name_in = "event1";
         let format_in = "4s1 var1 2u1 var2 2u1 var2";

@@ -15,6 +15,7 @@ use std::ffi::CString;
 include!("./bindings.rs");
 
 bitflags! {
+    #[derive(PartialEq)]
     pub struct SBIO_FLAGS: u32 {
         const RDONLY = GRE_IO_TYPE_RDONLY;
         const XRDONLY = GRE_IO_TYPE_XRDONLY;
@@ -23,12 +24,21 @@ bitflags! {
     }
 }
 
+impl SBIO_FLAGS {
+    pub fn as_u32(&self) -> u32 {
+        self.bits()
+    }
+}
+
 pub struct sbio_channel_handle {
     channel_handle: *mut gre_io_t,
 }
 
+unsafe impl Send for sbio_channel_handle {}
+
 pub struct sbio_serialized_data {
     buffer: *mut gre_io_serialized_data_t,
+    pub size: i32,
 }
 
 /// Open a SBIO channel using a named connection
@@ -51,6 +61,10 @@ pub fn open(channel_name: &str, flags: SBIO_FLAGS) -> Result<sbio_channel_handle
 
 /// Close a SBIO channel
 pub fn close(channel_handle: &sbio_channel_handle) {
+    if channel_handle.channel_handle.is_null() {
+        return;
+    }
+
     unsafe {
         gre_io_close(channel_handle.channel_handle);
     }
@@ -91,7 +105,10 @@ pub fn serialize<T>(
     if buffer.is_null() {
         Err("Couldn't serialize event data")
     } else {
-        Ok(sbio_serialized_data { buffer })
+        Ok(sbio_serialized_data {
+            buffer,
+            size: size as i32,
+        })
     }
 }
 
@@ -125,6 +142,34 @@ pub fn unserialize<'a, T>(buffer: &sbio_serialized_data) -> (&'a str, &'a str, &
     }
 
     (target, name, format, data, size)
+}
+
+pub fn unserialize_event_name(buffer: &sbio_serialized_data) -> &str {
+    let _target: &str;
+    let name: &str;
+    let _format: &str;
+    let _size;
+
+    unsafe {
+        let mut target_ptr: *mut c_char = std::ptr::null_mut();
+        let mut name_ptr: *mut c_char = std::ptr::null_mut();
+        let mut format_ptr: *mut c_char = std::ptr::null_mut();
+        let mut data_ptr: *mut c_void = std::ptr::null_mut();
+
+        _size = gre_io_unserialize(
+            buffer.buffer,
+            &mut target_ptr as *mut *mut c_char,
+            &mut name_ptr as *mut *mut c_char,
+            &mut format_ptr as *mut *mut c_char,
+            &mut data_ptr as *mut *mut c_void,
+        );
+
+        _target = CStr::from_ptr(target_ptr).to_str().unwrap();
+        name = CStr::from_ptr(name_ptr).to_str().unwrap();
+        _format = CStr::from_ptr(format_ptr).to_str().unwrap();
+    }
+
+    name
 }
 
 /// Free serialized data
@@ -164,7 +209,7 @@ pub fn receive(channel_handle: &sbio_channel_handle) -> Result<sbio_serialized_d
     if ret == -1 {
         Err("Couldn't receive event")
     } else {
-        Ok(sbio_serialized_data { buffer })
+        Ok(sbio_serialized_data { buffer, size: ret })
     }
 }
 
@@ -222,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn send_recieve_test() {
+    fn send_receive_test() {
         let target_in = "target";
         let name_in = "event1";
         let format_in = "4s1 var1 2u1 var2 2u1 var2";

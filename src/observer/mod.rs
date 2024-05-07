@@ -18,12 +18,15 @@ pub struct Subject<T> {
 }
 
 impl<T> Subject<T> {
-    pub fn _new() -> Subject<T> {
+    pub fn new() -> Subject<T> {
         Subject {
             observers: Vec::new(),
         }
     }
 }
+
+unsafe impl<T> Send for Subject<T> {}
+unsafe impl<T> Sync for Subject<T> {}
 
 impl<T> ISubject<T> for Subject<T> {
     fn add_observer(&mut self, observer: Observer<T>) {
@@ -74,7 +77,7 @@ mod oberserver_tests {
 
     #[test]
     fn add_observer_test() {
-        let mut subject = Subject::_new();
+        let mut subject = Subject::new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 
@@ -87,7 +90,7 @@ mod oberserver_tests {
 
     #[test]
     fn remove_observer_test() {
-        let mut subject = Subject::_new();
+        let mut subject = Subject::new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 
@@ -103,7 +106,7 @@ mod oberserver_tests {
 
     #[test]
     fn notify_test() {
-        let mut subject = Subject::_new();
+        let mut subject = Subject::new();
         let observer_a = Arc::new(Mutex::new(TestObserver { data: 0 }));
         let observer_b = Arc::new(Mutex::new(TestObserver { data: 0 }));
 

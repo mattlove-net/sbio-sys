@@ -6,7 +6,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GREIO_LIB_PATH: test/lib/x86_64/
+  SBIO_LIB_PATH: test/lib/x86_64/
 
 jobs:
   build:

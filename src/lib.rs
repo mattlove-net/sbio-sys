@@ -1,10 +1,8 @@
-mod observer;
 mod sbio;
-use observer::*;
 use sbio::sbio_sys::*;
 use std::sync::{Arc, Mutex};
 use std::thread::*;
-use std::{collections::HashMap, result::Result};
+use std::result::Result;
 
 pub struct SbioSerializeData {
     buffer: sbio_serialized_data,
@@ -22,26 +20,9 @@ impl Drop for SbioSerializeData {
     }
 }
 
-pub trait IEventCallback {
-    fn callback(&self, event: &SbioSerializeData);
-}
-
-pub struct EventObserver {
-    event: String,
-    callback: Box<dyn IEventCallback>,
-}
-
-impl IObserver<SbioSerializeData> for EventObserver {
-    fn update(&mut self, event: &SbioSerializeData) {
-        self.callback.callback(event);
-    }
-}
-
 struct SbioConnectionData {
     channel_handle: sbio_channel_handle,
     channel_open: bool,
-    stop_receive_thread: bool,
-    subscriptions: HashMap<String, Subject<SbioSerializeData>>,
 }
 
 #[allow(dead_code)]
@@ -102,86 +83,6 @@ impl SbioConnection {
 
         Ok(SbioSerializeData { buffer })
     }
-
-    // Start a thread to receive events
-    pub fn start_receive_thread(&mut self) -> Result<(), &'static str> {
-        if let Some(th) = self.thread_handle.take() {
-            th.is_finished();
-        }
-
-        let thread_data = self.thread_data.clone();
-        self.thread_handle = Some(spawn(move || loop {
-            let mut td = thread_data.lock().unwrap();
-            if td.stop_receive_thread {
-                break;
-            }
-
-            let buffer = match receive(&td.channel_handle) {
-                Ok(buffer) => buffer,
-                Err(_err) => continue, //Err("Problem receiving event: {:?}", err)
-            };
-
-            let name = unserialize_event_name(&buffer);
-            let subject = td.subscriptions.get_mut(name);
-            match subject {
-                Some(subject) => {
-                    let event = SbioSerializeData { buffer };
-                    subject.notify_observers(&event);
-                }
-                None => {
-                    free_buffer(&buffer);
-                }
-            }
-        }));
-
-        Ok(())
-    }
-
-    pub fn stop_receive_thread(&mut self) {
-        let mut thread_data = self.thread_data.lock().unwrap();
-        thread_data.stop_receive_thread = true;
-        drop(thread_data);
-        if let Some(th) = self.thread_handle.take() {
-            let _ = th.join();
-        }
-    }
-
-    // Register an event callback for receiving an event
-    pub fn add_event_callback(
-        &mut self,
-        name: String,
-        callback: Box<dyn IEventCallback>,
-    ) -> Arc<Mutex<EventObserver>> {
-        //let mut subject: Subject<T> = Subject::new();
-        let mut thread_data = self.thread_data.lock().unwrap();
-        let subject = thread_data
-            .subscriptions
-            .entry(name.clone())
-            .or_insert(Subject::new());
-
-        #[allow(clippy::arc_with_non_send_sync)]
-        let observer: Arc<Mutex<EventObserver>> = Arc::new(Mutex::new(EventObserver {
-            event: name,
-            callback,
-        }));
-        subject.add_observer(observer.clone());
-        observer
-    }
-
-    // Remove an event callback
-    pub fn remove_event_callback<T>(&mut self, observer: Arc<Mutex<EventObserver>>) -> bool {
-        let mut thread_data = self.thread_data.lock().unwrap();
-        let subject = thread_data
-            .subscriptions
-            .get_mut(&observer.lock().unwrap().event);
-        match subject {
-            Some(subject) => {
-                subject.remove_observer(observer);
-                true
-            }
-            None => false,
-        }
-    }
 }
 
 impl Drop for SbioConnection {
@@ -191,9 +92,9 @@ impl Drop for SbioConnection {
 }
 
 #[derive(Clone, Debug)]
-pub struct SbioWrapper();
+pub struct Sbio();
 
-impl SbioWrapper {
+impl Sbio {
     pub fn connect(
         &mut self,
         channel_name: &str,
@@ -207,8 +108,6 @@ impl SbioWrapper {
         let connection_data = SbioConnectionData {
             channel_handle: handle,
             channel_open: true,
-            stop_receive_thread: false,
-            subscriptions: HashMap::new(),
         };
 
         Ok(SbioConnection {
@@ -246,8 +145,6 @@ impl SbioWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use observer::*;
-    use sbio::*;
 
     struct TestData {
         var1: u32,
@@ -257,7 +154,7 @@ mod tests {
 
     #[test]
     fn open_test() {
-        let mut sbio = SbioWrapper();
+        let mut sbio = Sbio();
         let rcv = match sbio.connect_receive("open_test") {
             Ok(connection) => connection,
             Err(err) => panic!("Problem opening channel: {:?}", err),
@@ -272,8 +169,25 @@ mod tests {
     }
 
     #[test]
+    fn serialize_test() {
+        let mut sbio = Sbio();
+        let target_in = "target";
+        let name_in = "event1";
+        let format_in = "4s1 var1 2u1 var2 2u1 var2";
+        let data_in = TestData {
+            var1: 1,
+            var2: 2,
+            var3: 3,
+        };
+        let size_in = 10;
+
+        let result = sbio.serialize(target_in, name_in, format_in, data_in, size_in);
+        assert!(result.is_ok());
+    }
+
+    #[test]
     fn send_receive_event_test() {
-        let mut sbio = SbioWrapper();
+        let mut sbio = Sbio();
         let mut rcv = match sbio.connect_receive("send_receive_event_test") {
             Ok(connection) => connection,
             Err(err) => panic!("Problem receiving event: {:?}", err),
@@ -298,78 +212,5 @@ mod tests {
         assert!(result.is_ok());
         rcv.close();
         send.close();
-    }
-
-    #[test]
-    fn async_receive_test() {
-        let mut sbio = SbioWrapper();
-        let mut rcv = match sbio.connect_receive("async_receive_test") {
-            Ok(connection) => connection,
-            Err(err) => panic!("Problem receiving event: {:?}", err),
-        };
-        // Send an event
-        let mut send = match sbio.connect_send("async_receive_test") {
-            Ok(connection) => connection,
-            Err(err) => panic!("Problem sending event: {:?}", err),
-        };
-
-        let event_received = Arc::new(Mutex::new(false));
-        let received = event_received.clone();
-        struct TestCallback {
-            received: Arc<Mutex<bool>>,
-        }
-        impl IEventCallback for TestCallback {
-            fn callback(&self, event: &SbioSerializeData) {
-                let mut received = self.received.lock().unwrap();
-                *received = true;
-            }
-        }
-
-        let callback = TestCallback { received: received };
-        let observer = rcv.add_event_callback("event1".to_string(), Box::new(callback));
-        let result = rcv.start_receive_thread();
-        assert!(result.is_ok());
-
-        let result = send.send_event(
-            "target",
-            "event1",
-            "4s1 var1 2u1 var2 2u1 var3",
-            TestData {
-                var1: 1,
-                var2: 2,
-                var3: 3,
-            },
-            10,
-        );
-        assert!(result.is_ok());
-
-        let received = event_received.clone();
-        loop {
-            let received = received.lock().unwrap();
-            if *received {
-                break;
-            }
-        }
-
-        rcv.stop_receive_thread();
-        rcv.close();
-        send.close();
-    }
-
-    #[test]
-    fn serialize_test() {
-        let mut sbio = SbioWrapper();
-        let target_in = "target";
-        let name_in = "event1";
-        let format_in = "4s1 var1 2u1 var2 2u1 var2";
-        let data_in = TestData {
-            var1: 1,
-            var2: 2,
-            var3: 3,
-        };
-        let size_in = 10;
-
-        let result = sbio.serialize(target_in, name_in, format_in, data_in, size_in);
-        assert!(result.is_ok());
     }
 }

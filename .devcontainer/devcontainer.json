@@ -9,7 +9,7 @@
 	"features": {
 		"ghcr.io/devcontainers-contrib/features/act:1": {}
 	},
-	"containerEnv": { "GREIO_LIB_PATH": "./test/lib/x86_64"}
+	"containerEnv": { "SBIO_LIB_PATH": "./test/lib/x86_64"}
 
 	// Use 'mounts' to make the cargo cache persistent in a Docker Volume.
 	// "mounts": [

@@ -216,7 +216,6 @@ pub fn receive(channel_handle: &sbio_channel_handle) -> Result<sbio_serialized_d
 #[cfg(test)]
 mod tests {
     use super::*;
-    use observer::*;
 
     #[derive(PartialEq, Debug, Copy, Clone)]
     struct TestData {

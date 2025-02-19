@@ -1,6 +1,13 @@
 [package]
 name = "sbio"
 version = "0.4.0"
+license = "MIT"
+description = "Rust wrapper around Crank Software's Storyboard IO (SBIO) C AP"
+repository = "https://github.com/mattlove-net/sbio-sys"
+readme = "README.md"
+exclude = [
+    "test/*",
+]
 
 [dependencies]
 bitflags = "2.5.0"

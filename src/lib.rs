@@ -9,8 +9,21 @@ pub struct SbioSerializeData {
 }
 
 impl SbioSerializeData {
-    pub fn unserialize<'a, T>(&mut self) -> (&'a str, &'a str, &'a str, &T, i32) {
-        unserialize(&self.buffer)
+    pub fn name(&mut self) -> &str {
+        unserialize_event_name(&self.buffer)
+    }
+
+    pub fn target(&mut self)  -> &str {
+        unserialize_event_target(&self.buffer)
+    }
+
+    pub fn format(&mut self)  -> &str {
+        unserialize_event_format(&self.buffer)
+    }
+
+    pub fn data<T>(&mut self) -> Result<&T, &'static str> {
+        let (_, _, _, data, _) = unserialize(&self.buffer);
+        Ok(data)
     }
 }
 
@@ -146,6 +159,7 @@ impl Sbio {
 mod tests {
     use super::*;
 
+    #[derive(PartialEq, Debug, Clone)]
     struct TestData {
         var1: u32,
         var2: u16,
@@ -183,6 +197,42 @@ mod tests {
 
         let result = sbio.serialize(target_in, name_in, format_in, data_in, size_in);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unserialize_test() {
+        let mut sbio = Sbio();
+        let target_in = "target";
+        let name_in = "event1";
+        let format_in = "4s1 var1 2u1 var2 2u1 var2";
+        let data_in = TestData {
+            var1: 1,
+            var2: 2,
+            var3: 3,
+        };
+        let size_in = 10;
+
+        let result = sbio.serialize(target_in, name_in, format_in, data_in.clone(), size_in);
+        let mut serialized_data = match result {
+            Ok(data) => data,
+            Err(_) => panic!(),
+        };
+
+        let name = serialized_data.name();
+        assert_eq!(name, name_in);
+
+        let target = serialized_data.target();
+        assert_eq!(target, target_in);
+        
+        let format = serialized_data.format();
+        assert_eq!(format, format_in);
+    
+        let result: Result<&TestData, &'static str> = serialized_data.data();
+        let data = match result {
+            Ok(data) => data,
+            Err(_) => panic!(),
+        };
+        assert_eq!(data, &data_in);
     }
 
     #[test]

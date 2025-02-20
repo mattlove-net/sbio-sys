@@ -172,6 +172,90 @@ pub fn unserialize_event_name(buffer: &sbio_serialized_data) -> &str {
     name
 }
 
+pub fn unserialize_event_target(buffer: &sbio_serialized_data) -> &str {
+    let target: &str;
+    let _name: &str;
+    let _format: &str;
+    let _size;
+
+    unsafe {
+        let mut target_ptr: *mut c_char = std::ptr::null_mut();
+        let mut name_ptr: *mut c_char = std::ptr::null_mut();
+        let mut format_ptr: *mut c_char = std::ptr::null_mut();
+        let mut data_ptr: *mut c_void = std::ptr::null_mut();
+
+        _size = gre_io_unserialize(
+            buffer.buffer,
+            &mut target_ptr as *mut *mut c_char,
+            &mut name_ptr as *mut *mut c_char,
+            &mut format_ptr as *mut *mut c_char,
+            &mut data_ptr as *mut *mut c_void,
+        );
+
+        target = CStr::from_ptr(target_ptr).to_str().unwrap();
+        _name = CStr::from_ptr(name_ptr).to_str().unwrap();
+        _format = CStr::from_ptr(format_ptr).to_str().unwrap();
+    }
+
+    target
+}
+
+pub fn unserialize_event_format(buffer: &sbio_serialized_data) -> &str {
+    let _target: &str;
+    let _name: &str;
+    let format: &str;
+    let _size;
+
+    unsafe {
+        let mut target_ptr: *mut c_char = std::ptr::null_mut();
+        let mut name_ptr: *mut c_char = std::ptr::null_mut();
+        let mut format_ptr: *mut c_char = std::ptr::null_mut();
+        let mut data_ptr: *mut c_void = std::ptr::null_mut();
+
+        _size = gre_io_unserialize(
+            buffer.buffer,
+            &mut target_ptr as *mut *mut c_char,
+            &mut name_ptr as *mut *mut c_char,
+            &mut format_ptr as *mut *mut c_char,
+            &mut data_ptr as *mut *mut c_void,
+        );
+
+        _target = CStr::from_ptr(target_ptr).to_str().unwrap();
+        _name = CStr::from_ptr(name_ptr).to_str().unwrap();
+        format = CStr::from_ptr(format_ptr).to_str().unwrap();
+    }
+
+    format
+}
+
+pub fn unserialize_event_size(buffer: &sbio_serialized_data) -> i32 {
+    let _target: &str;
+    let _name: &str;
+    let _format: &str;
+    let size;
+
+    unsafe {
+        let mut target_ptr: *mut c_char = std::ptr::null_mut();
+        let mut name_ptr: *mut c_char = std::ptr::null_mut();
+        let mut format_ptr: *mut c_char = std::ptr::null_mut();
+        let mut data_ptr: *mut c_void = std::ptr::null_mut();
+
+        size = gre_io_unserialize(
+            buffer.buffer,
+            &mut target_ptr as *mut *mut c_char,
+            &mut name_ptr as *mut *mut c_char,
+            &mut format_ptr as *mut *mut c_char,
+            &mut data_ptr as *mut *mut c_void,
+        );
+
+        _target = CStr::from_ptr(target_ptr).to_str().unwrap();
+        _name = CStr::from_ptr(name_ptr).to_str().unwrap();
+       _format = CStr::from_ptr(format_ptr).to_str().unwrap();
+    }
+
+    size
+}
+
 /// Free serialized data
 pub fn free_buffer(buffer: &sbio_serialized_data) {
     unsafe {

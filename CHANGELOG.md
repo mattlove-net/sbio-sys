@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/mattlove-net/sbio-sys/compare/v0.4.0...v0.5.0) (2025-02-20)
+
+
+### Features
+
+* add functions to get the event name, target, format, and data from the SbioSerializeData type ([dbc81ff](https://github.com/mattlove-net/sbio-sys/commit/dbc81ff12d5af4634359bcd673536a05cce28a7c))
+
+
+### Bug Fixes
+
+* update Cargo.toml and force release ([71493a1](https://github.com/mattlove-net/sbio-sys/commit/71493a11ee91f43f021214c50c36079fbe8f4360))
+
 ## [0.4.0](https://github.com/mattlove-net/sbio-wrapper/compare/v0.3.0...v0.4.0) (2024-05-07)
 
 
